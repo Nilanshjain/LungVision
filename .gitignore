@@ -218,6 +218,10 @@ dmypy.json
 # *.pkl
 # *.joblib
 
+# Uploaded files
+backend/uploads/*
+!backend/uploads/.gitkeep
+
 # Database files
 *.db
 *.sqlite

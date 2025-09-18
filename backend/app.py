@@ -30,10 +30,8 @@ from tensorflow.keras.optimizers.legacy import Adam as LegacyAdam
 import time
 
 
-# Load environment variables
 load_dotenv()
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -42,11 +40,8 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-for-jwt')
 app.config['JWT_EXPIRATION_HOURS'] = 24  # Token valid for 24 hours
 CORS(app, supports_credentials=True)
 
-# App behavior flags (can be overridden via environment)
-ALLOW_START_WITHOUT_DB = os.getenv('ALLOW_START_WITHOUT_DB', 'true').lower() == 'true'
-DISABLE_AUTH = os.getenv('DISABLE_AUTH', 'true').lower() == 'true'
-
-# MongoDB connection using environment variable with retry logic
+ALLOW_START_WITHOUT_DB = os.getenv('ALLOW_START_WITHOUT_DB', 'false').lower() == 'true'
+DISABLE_AUTH = os.getenv('DISABLE_AUTH', 'false').lower() == 'true'
 MONGODB_URI = os.getenv('MONGODB_URI')
 MAX_RETRIES = 3
 RETRY_DELAY = 2
@@ -95,12 +90,10 @@ else:
     patients_collection = None
     doctors_collection = None
 
-# Configure upload folder
 UPLOAD_FOLDER = 'uploads'
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
-# JWT token helper functions
 def generate_jwt_token(doctor_id):
     """Generate a JWT token for the doctor"""
     payload = {
@@ -518,13 +511,21 @@ def save_record():
             logger.error(f"Invalid prediction data format: {e}")
             return jsonify({'success': False, 'error': 'Invalid prediction data format'}), 400
 
-        # Save the image file
+        # Save the image file with security validation
         try:
             if not os.path.exists('uploads'):
                 os.makedirs('uploads')
-                
+            
+            # Validate file type
+            allowed_extensions = {'.jpg', '.jpeg', '.png', '.bmp'}
+            file_ext = os.path.splitext(file.filename)[1].lower()
+            if file_ext not in allowed_extensions:
+                return jsonify({'success': False, 'error': 'Invalid file type. Only JPG, PNG, BMP allowed.'}), 400
+            
+            # Sanitize filename
+            safe_patient_id = secure_filename(str(patient_id))
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f"{patient_id}_{timestamp}.jpg"
+            filename = f"{safe_patient_id}_{timestamp}{file_ext}"
             filepath = os.path.join('uploads', filename)
             file.save(filepath)
             logger.info(f"Image saved to: {filepath}")
@@ -593,14 +594,15 @@ def signup():
         if doctors_collection.find_one({'email': data['email']}):
             return jsonify({'success': False, 'message': 'Email already registered'}), 409
             
-        # Use plaintext password - no hashing
+        # Hash password securely
         password = data['password']
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
         
         # Create new doctor document
         new_doctor = {
             '_id': str(uuid.uuid4()),
             'email': data['email'],
-            'password': password,
+            'password': hashed_password.decode('utf-8'),
             'name': data['name'],
             'created_at': datetime.now()
         }
@@ -651,11 +653,11 @@ def login():
             logger.error("Doctor record is missing password field")
             return jsonify({'success': False, 'message': 'Invalid account data'}), 500
         
-        # Check password - simple plaintext comparison
+        # Verify password using bcrypt
         input_password = data['password']
         stored_password = doctor['password']
         
-        if input_password == stored_password:
+        if bcrypt.checkpw(input_password.encode('utf-8'), stored_password.encode('utf-8')):
             # Generate JWT token
             token = generate_jwt_token(doctor['_id'])
             
@@ -855,4 +857,5 @@ def get_patient(patient_id):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    debug_mode = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
+    app.run(host='0.0.0.0', port=5000, debug=debug_mode)
