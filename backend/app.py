@@ -605,14 +605,15 @@ def signup():
         if doctors_collection is not None and doctors_collection.find_one({'email': data['email']}):
             return jsonify({'success': False, 'message': 'Email already registered'}), 409
             
-        # Store password (simplified for development)
+        # Hash password securely
         password = data['password']
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
         
         # Create new doctor document
         new_doctor = {
             '_id': str(uuid.uuid4()),
             'email': data['email'],
-            'password': password,
+            'password': hashed_password.decode('utf-8'),
             'name': data['name'],
             'created_at': datetime.now()
         }
@@ -668,54 +669,13 @@ def login():
             logger.error("Doctor record is missing password field")
             return jsonify({'success': False, 'message': 'Invalid account data'}), 500
         
-        # Verify password - handle both plaintext and hashed passwords
+        # Verify password using bcrypt
         input_password = data['password']
         stored_password = doctor['password']
         
-        # Check if password is hashed (bcrypt hashes start with $2b$)
-        if stored_password.startswith('$2b$'):
-            try:
-                # Password is hashed, use bcrypt verification
-                if bcrypt.checkpw(input_password.encode('utf-8'), stored_password.encode('utf-8')):
-                    # Generate JWT token
-                    token = generate_jwt_token(doctor['_id'])
-                    
-                    return jsonify({
-                        'success': True,
-                        'message': 'Login successful',
-                        'token': token,
-                        'doctor': {
-                            'id': doctor['_id'],
-                            'name': doctor['name'],
-                            'email': doctor['email']
-                        }
-                    })
-                else:
-                    logger.warning(f"Invalid password for email: {data['email']}")
-                    return jsonify({'success': False, 'message': 'Invalid email or password'}), 401
-            except Exception as e:
-                logger.error(f"Bcrypt verification failed: {str(e)}")
-                # If bcrypt fails, fall back to plaintext comparison
-                if input_password == stored_password:
-                    # Generate JWT token
-                    token = generate_jwt_token(doctor['_id'])
-                    
-                    return jsonify({
-                        'success': True,
-                        'message': 'Login successful',
-                        'token': token,
-                        'doctor': {
-                            'id': doctor['_id'],
-                            'name': doctor['name'],
-                            'email': doctor['email']
-                        }
-                    })
-                else:
-                    logger.warning(f"Invalid password for email: {data['email']}")
-                    return jsonify({'success': False, 'message': 'Invalid email or password'}), 401
-        else:
-            # Password is plaintext, compare directly
-            if input_password == stored_password:
+        try:
+            # Use bcrypt verification for encrypted passwords
+            if bcrypt.checkpw(input_password.encode('utf-8'), stored_password.encode('utf-8')):
                 # Generate JWT token
                 token = generate_jwt_token(doctor['_id'])
                 
@@ -732,6 +692,9 @@ def login():
             else:
                 logger.warning(f"Invalid password for email: {data['email']}")
                 return jsonify({'success': False, 'message': 'Invalid email or password'}), 401
+        except Exception as e:
+            logger.error(f"Password verification failed: {str(e)}")
+            return jsonify({'success': False, 'message': 'Invalid email or password'}), 401
             
     except Exception as e:
         logger.error(f"Error in login: {str(e)}")
