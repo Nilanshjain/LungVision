@@ -213,10 +213,10 @@ venv.bak/
 .dmypy.json
 dmypy.json
 
-# Machine Learning Models (if too large)
-# *.h5
-# *.pkl
-# *.joblib
+# Machine Learning Models (too large for GitHub)
+*.h5
+*.pkl
+*.joblib
 
 # Uploaded files
 backend/uploads/*
