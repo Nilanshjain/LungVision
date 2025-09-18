@@ -141,6 +141,11 @@ EXPO_PUBLIC_API_URL=http://localhost:5000
 
 The AI model (`Lung_Model.h5`) should be placed in the backend directory. The model is trained to detect lung cancer from CT scan images.
 
+**Note:** Due to GitHub's file size limits, the model file is not included in this repository. You'll need to:
+1. Download the model file separately
+2. Place it in the `backend/` directory
+3. Ensure it's named `Lung_Model.h5`
+
 ## 📊 API Endpoints
 
 ### Authentication
